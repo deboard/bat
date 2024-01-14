@@ -216,6 +216,23 @@ impl<'a> Input<'a> {
                 description,
                 metadata: self.metadata,
                 reader: {
+
+                    #[cfg(unix)]
+                    {
+                        let fname = String::from(path.to_string_lossy());
+                        if fname == "/dev/zero" {
+                            // /dev/zero seems to be a special case file for bat on unix.
+                            // It is a zero length char file of infinate lendth.
+                            // This makes it imposible to read in the first line.
+                            // Reading in the first line is the first thing
+                            // InputReader::new does.
+                            // I hate hard coding things like this...
+                            // Files like /dev/tty cause bat to hang but
+                            // it doesn't cause bat to crash like /dev/zero.
+                            return Err(format!("'{fname}' <EMPTY>.").into());
+                        }
+                    }
+
                     let mut file = File::open(&path)
                         .map_err(|e| format!("'{}': {}", path.to_string_lossy(), e))?;
                     if file.metadata()?.is_dir() {
@@ -235,7 +252,7 @@ impl<'a> Input<'a> {
                         }
                         file = input_identifier.into_inner().expect("The file was lost in the clircle::Identifier, this should not have happened...");
                     }
-
+                    
                     InputReader::new(BufReader::new(file))
                 },
             }),
